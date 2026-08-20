@@ -118,43 +118,63 @@ class TransferController:
         seen_files
     ):
 
+        try:
+            source_path = Path(
+                file_path
+            ).resolve()
+
+        except OSError as e:
+
+            print(
+                f"[Transfer] Path resolve error: "
+                f"{file_path}"
+            )
+
+            print(e)
+
+            return
+
+        # -------------------------
+        # Duplicate physical file
+        # -------------------------
+
+        if source_path in seen_files:
+
+            print(
+                "[Transfer] Duplicate file skipped:"
+            )
+
+            print(
+                f"  {source_path}"
+            )
+
+            return
+
+        seen_files.add(
+            source_path
+        )
+
+        # -------------------------
+        # Calculate hash
+        # -------------------------
+
         file_hash = self.calculate_hash(
-            file_path
+            source_path
         )
 
         if not file_hash:
 
             return
 
-        # -------------------------
-        # Duplicate content
-        # -------------------------
-
-        if file_hash in seen_files:
-
-            print(
-                "[Transfer] Duplicate content skipped:"
-            )
-
-            print(
-                f"  {file_path}"
-            )
-
-            return
-
-        seen_files.add(
-            file_hash
-        )
-
         self.transfer_items.append({
 
-            "source": file_path,
+            "source": source_path,
 
             "relative_path": str(
                 relative_path
             ),
 
-            "size": file_path.stat().st_size,
+            "size": source_path.stat().st_size,
 
             "hash": file_hash
 
@@ -284,6 +304,8 @@ class TransferController:
 
             return
 
+        self.prepare_outgoing_popup()
+
         packet = TransferService.create_request(
             self.transfer_items
         )
@@ -308,6 +330,106 @@ class TransferController:
             f"{len(packet['items'])}"
         )
 
+    def prepare_outgoing_popup(self):
+    
+            self.transfer_popup.clear_items()
+    
+            folders = {}
+    
+            files = []
+    
+            total_size = 0
+    
+            for item in self.transfer_items:
+    
+                relative_path = Path(
+                    item["relative_path"]
+                )
+    
+                size = item["size"]
+    
+                total_size += size
+
+                if len(relative_path.parts) > 1:
+
+                    folder = relative_path.parts[0]
+
+                    folders.setdefault(
+                        folder,
+                        0
+                    )
+
+                    folders[folder] += 1
+
+                else:
+
+                    files.append(item)
+    
+                # -------------------------
+                # Folder file
+                # -------------------------
+    
+                if len(relative_path.parts) > 1:
+    
+                    folder = relative_path.parts[0]
+    
+                    folders.setdefault(
+                        folder,
+                        0
+                    )
+    
+                    folders[folder] += 1
+    
+                # -------------------------
+                # Root file
+                # -------------------------
+    
+                files.append(
+                    item
+                )
+    
+            # -------------------------
+            # Add folders
+            # -------------------------
+    
+            for folder in sorted(folders):
+
+                self.transfer_popup.add_item(
+                    folder,
+                    "folder",
+                    f"{folders[folder]} files",
+                    item_key=f"folder:{folder}"
+                )
+
+            for item in files:
+
+                relative_path = Path(
+                    item["relative_path"]
+                )
+
+                self.transfer_popup.add_item(
+                    relative_path.name,
+                    "file",
+                    self.format_size(
+                        item["size"]
+                    ),
+                    item_key=str(
+                        relative_path
+                    )
+                )
+
+            self.transfer_popup.set_summary(
+                folders=len(folders),
+                files=len(self.transfer_items),
+                total_size=self.format_size(
+                    total_size
+                )
+            )
+
+            self.transfer_popup.set_progress(
+                0
+            )
+    
     def test_incoming_transfer(self):
 
         self.transfer_popup.clear_items()
@@ -411,7 +533,8 @@ class TransferController:
             self.transfer_popup.add_item(
                 folder,
                 "folder",
-                f"{folder_files} files"
+                f"{folder_files} files",
+                item_key=f"folder:{folder}"
             )
 
         for item in files:
@@ -430,7 +553,8 @@ class TransferController:
                 "file",
                 self.format_size(
                     item["size"]
-                )
+                ),
+                item_key=str(relative_path)
             )
 
         self.transfer_popup.set_summary(

@@ -20,7 +20,7 @@ class TransferPopup(tk.Toplevel):
 
         self.on_accept = None
         self.on_reject = None
-
+        self.item_status_labels = {}
         self.withdraw()
 
         self.title("Incoming Transfer")
@@ -232,12 +232,18 @@ class TransferPopup(tk.Toplevel):
 
             widget.destroy()
 
+        self.item_status_labels.clear()
+
     def add_item(
         self,
         name,
         item_type,
-        size
+        size,
+        item_key=None
     ):
+
+        if item_key is None:
+            item_key = name
 
         row = tk.Frame(
             self.list_frame
@@ -300,6 +306,8 @@ class TransferPopup(tk.Toplevel):
             pady=3
         )
 
+        self.item_status_labels[item_key] = status_label
+
         return status_label
 
     def set_progress(self, value):
@@ -338,4 +346,22 @@ class TransferPopup(tk.Toplevel):
                 status,
                 "⏳"
             )
+        )
+
+    def set_item_status_by_key(
+        self,
+        item_key,
+        status
+    ):
+
+        status_label = (
+            self.item_status_labels.get(item_key)
+        )
+
+        if status_label is None:
+            return
+
+        self.set_item_status(
+            status_label,
+            status
         )

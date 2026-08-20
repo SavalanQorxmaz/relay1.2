@@ -45,6 +45,8 @@ class ConnectionController:
         self.current_file_handle = None
         self.current_file_size = 0
         self.current_file_received = 0
+        self.total_transfer_size = 0
+        self.transferred_size = 0
         self.current_file_hash = None
         self.current_file_hasher = None
         self.waiting_for_file_end = False
@@ -450,7 +452,6 @@ class ConnectionController:
                     )
 
                     if remaining <= 0:
-
                         self.waiting_for_file_end = True
 
                         continue
@@ -584,6 +585,8 @@ class ConnectionController:
                 "[Transfer] Transfer accepted"
             )
 
+            self.ui_manager.transfer_controller.transfer_popup.show()
+
             self.start_file_transfer()
 
         elif packet_type == (
@@ -701,6 +704,8 @@ class ConnectionController:
             .get_transfer_items()
         )
 
+        
+
         if not items:
 
             print(
@@ -716,6 +721,13 @@ class ConnectionController:
         print(
             f"[Transfer] Total files: {len(items)}"
         )
+
+        self.total_transfer_size = sum(
+            item["size"]
+            for item in items
+        )
+
+        self.transferred_size = 0
 
         self.file_transfer_service = (
             FileTransferService(
@@ -750,9 +762,7 @@ class ConnectionController:
             )
 
             self.send_transfer_packet(
-                {
-                    "type": "transfer_complete"
-                }
+                TransferService.create_complete()
             )
 
             print(
@@ -1176,13 +1186,25 @@ class ConnectionController:
         item
     ):
 
+        relative_path = str(
+            item["relative_path"]
+        )
+
         print(
             "[Transfer] File started:"
         )
 
         print(
             f"  [{index}/{total}] "
-            f"{item['relative_path']}"
+            f"{relative_path}"
+        )
+
+        self.ui_manager.root.after(
+            0,
+            lambda: self.ui_manager.transfer_popup.set_item_status_by_key(
+                relative_path,
+                "transferring"
+            )
         )
 
     def on_file_progress(
@@ -1216,13 +1238,25 @@ class ConnectionController:
         item
     ):
 
+        relative_path = str(
+            item["relative_path"]
+        )
+
         print(
             "[Transfer] File completed:"
         )
 
         print(
             f"  [{index}/{total}] "
-            f"{item['relative_path']}"
+            f"{relative_path}"
+        )
+
+        self.ui_manager.root.after(
+            0,
+            lambda: self.ui_manager.transfer_popup.set_item_status_by_key(
+                relative_path,
+                "transferred"
+            )
         )
 
     def on_file_error(
