@@ -469,6 +469,7 @@ class TransferController:
         packet
     ):
 
+
         print(
             "[Transfer] Incoming transfer request"
         )
@@ -491,6 +492,9 @@ class TransferController:
         folders = set()
         files = []
         total_size = 0
+        self.receive_folder_files = {}
+        self.receive_folder_completed = {}
+        self.receive_folder_failed = set()
 
         for item in items:
 
@@ -504,11 +508,22 @@ class TransferController:
 
             if len(relative_path.parts) > 1:
 
+                folder = relative_path.parts[0]
+
                 folders.add(
-                    relative_path.parts[0]
+                    folder
                 )
 
-            files.append(item)
+                self.receive_folder_files.setdefault(
+                    folder,
+                    set()
+                )
+
+                self.receive_folder_files[
+                    folder
+                ].add(
+                    str(relative_path)
+                )
 
         print(
             f"[Transfer] Incoming files: "
@@ -568,7 +583,11 @@ class TransferController:
         self.transfer_popup.set_progress(
             0
         )
+        self.ui_manager.connection_controller.total_receive_size = (
+            total_size
+        )
 
+        self.ui_manager.connection_controller.completed_receive_size = 0
         self.transfer_popup.show()
 
     def format_size(self, size):
