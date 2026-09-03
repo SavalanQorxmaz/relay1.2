@@ -332,103 +332,79 @@ class TransferController:
 
     def prepare_outgoing_popup(self):
     
-            self.transfer_popup.clear_items()
-    
-            folders = {}
-    
-            files = []
-    
-            total_size = 0
-    
-            for item in self.transfer_items:
-    
-                relative_path = Path(
-                    item["relative_path"]
-                )
-    
-                size = item["size"]
-    
-                total_size += size
+        self.transfer_popup.clear_items()
 
-                if len(relative_path.parts) > 1:
+        folders = {}
 
-                    folder = relative_path.parts[0]
+        files = []
 
-                    folders.setdefault(
-                        folder,
-                        0
-                    )
+        total_size = 0
 
-                    folders[folder] += 1
+        for item in self.transfer_items:
 
-                else:
+            relative_path = Path(
+                item["relative_path"]
+            )
 
-                    files.append(item)
-    
-                # -------------------------
-                # Folder file
-                # -------------------------
-    
-                if len(relative_path.parts) > 1:
-    
-                    folder = relative_path.parts[0]
-    
-                    folders.setdefault(
-                        folder,
-                        0
-                    )
-    
-                    folders[folder] += 1
-    
-                # -------------------------
-                # Root file
-                # -------------------------
-    
-                files.append(
-                    item
-                )
-    
-            # -------------------------
-            # Add folders
-            # -------------------------
-    
-            for folder in sorted(folders):
+            size = item["size"]
 
-                self.transfer_popup.add_item(
+            total_size += size
+
+            if len(relative_path.parts) > 1:
+
+                folder = relative_path.parts[0]
+
+                folders.setdefault(
                     folder,
-                    "folder",
-                    f"{folders[folder]} files",
-                    item_key=f"folder:{folder}"
+                    0
                 )
 
-            for item in files:
+                folders[folder] += 1
 
-                relative_path = Path(
-                    item["relative_path"]
-                )
+            else:
 
-                self.transfer_popup.add_item(
-                    relative_path.name,
-                    "file",
-                    self.format_size(
-                        item["size"]
-                    ),
-                    item_key=str(
-                        relative_path
-                    )
-                )
+                files.append(item)
+        # -------------------------
+        # Add folders
+        # -------------------------
 
-            self.transfer_popup.set_summary(
-                folders=len(folders),
-                files=len(self.transfer_items),
-                total_size=self.format_size(
-                    total_size
+        for folder in sorted(folders):
+
+            self.transfer_popup.add_item(
+                folder,
+                "folder",
+                f"{folders[folder]} files",
+                item_key=f"folder:{folder}"
+            )
+
+        for item in files:
+
+            relative_path = Path(
+                item["relative_path"]
+            )
+
+            self.transfer_popup.add_item(
+                relative_path.name,
+                "file",
+                self.format_size(
+                    item["size"]
+                ),
+                item_key=str(
+                    relative_path
                 )
             )
 
-            self.transfer_popup.set_progress(
-                0
+        self.transfer_popup.set_summary(
+            folders=len(folders),
+            files=len(self.transfer_items),
+            total_size=self.format_size(
+                total_size
             )
+        )
+
+        self.transfer_popup.set_progress(
+            0
+        )
     
     def test_incoming_transfer(self):
 

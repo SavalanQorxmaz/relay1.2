@@ -591,7 +591,7 @@ class ConnectionController:
                 "[Transfer] Transfer accepted"
             )
 
-            self.ui_manager.transfer_controller.transfer_popup.show()
+            self.ui_manager.transfer_popup.show()
 
             self.start_file_transfer()
 
@@ -657,14 +657,35 @@ class ConnectionController:
                 "[Transfer] Transfer complete"
             )
 
-            self.close_current_file()
 
-            self.ui_manager.root.after(
-                0,
-                lambda: self.ui_manager.transfer_popup.set_progress(
-                    100
+            if (
+                self.completed_receive_size
+                >= self.total_receive_size
+            ):
+
+                self.ui_manager.root.after(
+                    0,
+                    lambda: self.ui_manager.set_state(
+                        AppState.CONNECTED
+                    )
                 )
-            )
+
+            else:
+
+                print(
+                    "[Transfer] Transfer complete received, "
+                    "but not all files were completed"
+                )
+
+                print(
+                    f"  Completed: "
+                    f"{self.completed_receive_size}"
+                )
+
+                print(
+                    f"  Expected: "
+                    f"{self.total_receive_size}"
+                )
 
     def send_transfer_packet(self, packet):
 
@@ -740,14 +761,15 @@ class ConnectionController:
             for item in items
         )
 
-        self.transferred_size = 0
-        self.completed_transfer_size = 0
-
         self.file_transfer_service = (
             FileTransferService(
                 self.socket
             )
         )
+
+        self.transferred_size = 0
+        self.completed_transfer_size = 0
+        self.failed_transfer_files = 0
 
         threading.Thread(
             target=self._run_file_transfer,
@@ -775,12 +797,32 @@ class ConnectionController:
                 on_file_error=self.on_file_error
             )
 
-            self.send_transfer_packet(
-                TransferService.create_complete()
-            )
+            if self.failed_transfer_files == 0:
 
-            print(
-                "[Transfer] All files processed"
+                self.send_transfer_packet(
+                    TransferService.create_complete()
+                )
+
+                print(
+                    "[Transfer] All files transferred successfully"
+                )
+
+            else:
+
+                print(
+                    "[Transfer] Transfer finished with errors"
+                )
+
+                print(
+                    f"  Failed files: "
+                    f"{self.failed_transfer_files}"
+                )
+
+            self.ui_manager.root.after(
+                0,
+                lambda: self.ui_manager.transfer_popup.set_transfer_finished(
+                    self.failed_transfer_files
+                )
             )
 
         except Exception as e:
@@ -1003,9 +1045,15 @@ class ConnectionController:
 
             self.ui_manager.root.after(
                 0,
-                lambda: self.ui_manager.transfer_popup.set_item_status_by_key(
-                    relative_path,
-                    "transferred"
+                lambda: (
+                    self.ui_manager.transfer_popup.set_item_status_by_key(
+                        relative_path,
+                        "transferred"
+                    ),
+                    self.ui_manager.transfer_popup.set_folder_file_status(
+                        relative_path,
+                        "transferred"
+                    )
                 )
             )
 
@@ -1030,9 +1078,15 @@ class ConnectionController:
 
             self.ui_manager.root.after(
                 0,
-                lambda: self.ui_manager.transfer_popup.set_item_status_by_key(
-                    relative_path,
-                    "failed"
+                lambda: (
+                    self.ui_manager.transfer_popup.set_item_status_by_key(
+                        relative_path,
+                        "failed"
+                    ),
+                    self.ui_manager.transfer_popup.set_folder_file_status(
+                        relative_path,
+                        "failed"
+                    )
                 )
             )
 
@@ -1100,6 +1154,14 @@ class ConnectionController:
                 "Incomplete file"
             )
 
+            self.ui_manager.root.after(
+                0,
+                lambda: self.ui_manager.transfer_popup.set_folder_file_status(
+                    relative_path,
+                    "failed"
+                )
+            )
+
             return
 
         if (
@@ -1125,12 +1187,17 @@ class ConnectionController:
                 "FILE_END path mismatch"
             )
 
+            self.ui_manager.root.after(
+                0,
+                lambda: self.ui_manager.transfer_popup.set_folder_file_status(
+                    relative_path,
+                    "failed"
+                )
+            )
+
             return
 
-        if (
-            file_hash
-            != self.current_file_hash
-        ):
+        if file_hash != self.current_file_hash:
 
             print(
                 "[Transfer] FILE_END hash mismatch:"
@@ -1150,6 +1217,14 @@ class ConnectionController:
                 "FILE_END hash mismatch"
             )
 
+            self.ui_manager.root.after(
+                0,
+                lambda: self.ui_manager.transfer_popup.set_folder_file_status(
+                    relative_path,
+                    "failed"
+                )
+            )
+
             return
 
         file_size = self.current_file_size
@@ -1157,7 +1232,9 @@ class ConnectionController:
         success = self.finish_current_file()
 
         if success:
+
             self.completed_receive_size += file_size
+
             self.update_transfer_progress()
 
 
@@ -1165,6 +1242,10 @@ class ConnectionController:
         self,
         error
     ):
+
+        relative_path = (
+            self.current_file_relative_path
+        )
 
         print(
             "[Transfer] File failed:"
@@ -1178,8 +1259,24 @@ class ConnectionController:
             f"  Error: {error}"
         )
 
-        self.close_current_file()
+        if relative_path:
 
+            self.ui_manager.root.after(
+                0,
+                lambda: (
+                    self.ui_manager.transfer_popup.set_item_status_by_key(
+                        relative_path,
+                        "failed"
+                    ),
+                    self.ui_manager.transfer_popup.set_folder_file_status(
+                        relative_path,
+                        "failed"
+                    )
+                )
+            )
+
+        self.close_current_file()
+        
     def close_current_file(self):
 
         if self.current_file_handle:
@@ -1333,69 +1430,19 @@ class ConnectionController:
             item["size"]
         )
 
-        # -------------------------
-        # File status
-        # -------------------------
-
         self.ui_manager.root.after(
             0,
-            lambda: self.ui_manager.transfer_popup.set_item_status_by_key(
-                relative_path,
-                "transferred"
-            )
-        )
-
-        # -------------------------
-        # Folder status
-        # -------------------------
-
-        relative = Path(
-            relative_path
-        )
-
-        if len(relative.parts) <= 1:
-
-            return
-
-        folder = relative.parts[0]
-
-        completed = (
-            self.receive_folder_completed
-            .setdefault(
-                folder,
-                set()
-            )
-        )
-
-        completed.add(
-            relative_path
-        )
-
-        expected = (
-            self.receive_folder_files
-            .get(
-                folder,
-                set()
-            )
-        )
-
-        if completed == expected:
-
-            print(
-                "[Transfer] Folder completed:"
-            )
-
-            print(
-                f"  {folder}"
-            )
-
-            self.ui_manager.root.after(
-                0,
-                lambda: self.ui_manager.transfer_popup.set_item_status_by_key(
-                    f"folder:{folder}",
+            lambda: (
+                self.ui_manager.transfer_popup.set_item_status_by_key(
+                    relative_path,
+                    "transferred"
+                ),
+                self.ui_manager.transfer_popup.set_folder_file_status(
+                    relative_path,
                     "transferred"
                 )
             )
+        )
 
     def on_file_error(
         self,
@@ -1409,28 +1456,10 @@ class ConnectionController:
             item["relative_path"]
         )
 
-        relative = Path(
-            relative_path
-        )
-
-        if len(relative.parts) > 1:
-
-            folder = relative.parts[0]
-
-            self.receive_folder_failed.add(
-                folder
-            )
-
-            self.ui_manager.root.after(
-                0,
-                lambda: self.ui_manager.transfer_popup.set_item_status_by_key(
-                    f"folder:{folder}",
-                    "failed"
-                )
-            )
+        self.failed_transfer_files += 1
 
         print(
-            "[Transfer] File failed:"
+            "[Transfer] File skipped:"
         )
 
         print(
@@ -1444,9 +1473,15 @@ class ConnectionController:
 
         self.ui_manager.root.after(
             0,
-            lambda: self.ui_manager.transfer_popup.set_item_status_by_key(
-                relative_path,
-                "failed"
+            lambda: (
+                self.ui_manager.transfer_popup.set_item_status_by_key(
+                    relative_path,
+                    "failed"
+                ),
+                self.ui_manager.transfer_popup.set_folder_file_status(
+                    relative_path,
+                    "failed"
+                )
             )
         )
 

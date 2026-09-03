@@ -21,6 +21,7 @@ class TransferPopup(tk.Toplevel):
         self.on_accept = None
         self.on_reject = None
         self.item_status_labels = {}
+        self.folder_items = {}
         self.withdraw()
 
         self.title("Incoming Transfer")
@@ -233,6 +234,7 @@ class TransferPopup(tk.Toplevel):
             widget.destroy()
 
         self.item_status_labels.clear()
+        self.folder_items.clear()
 
     def add_item(
         self,
@@ -308,6 +310,18 @@ class TransferPopup(tk.Toplevel):
 
         self.item_status_labels[item_key] = status_label
 
+        if item_type == "folder":
+
+            folder_files = int(
+                str(size).split()[0]
+            )
+
+            self.folder_items[item_key] = {
+                "files": folder_files,
+                "completed": 0,
+                "failed": 0
+            }
+
         return status_label
 
     def set_progress(self, value):
@@ -365,3 +379,90 @@ class TransferPopup(tk.Toplevel):
             status_label,
             status
         )
+
+    def set_folder_file_status(
+        self,
+        relative_path,
+        status
+    ):
+
+        relative_path = str(
+            relative_path
+        )
+
+        parts = relative_path.replace(
+            "\\",
+            "/"
+        ).split("/")
+
+        # Fayl root-da yerləşirsə,
+        # folder statusuna təsir etmir.
+        if len(parts) <= 1:
+            return
+
+        folder_key = (
+            f"folder:{parts[0]}"
+        )
+
+        folder_data = (
+            self.folder_items.get(
+                folder_key
+            )
+        )
+
+        if folder_data is None:
+            return
+
+        if status == "transferred":
+
+            folder_data["completed"] += 1
+
+        elif status == "failed":
+
+            folder_data["failed"] += 1
+
+        total = folder_data["files"]
+
+        completed = folder_data["completed"]
+        failed = folder_data["failed"]
+
+        if failed > 0:
+
+            folder_status = "failed"
+
+        elif completed >= total:
+
+            folder_status = "transferred"
+
+        else:
+
+            folder_status = "transferring"
+
+        self.set_item_status_by_key(
+            folder_key,
+            folder_status
+        )
+
+    def set_transfer_finished(
+        self,
+        failed_files=0
+    ):
+
+        if failed_files > 0:
+
+            self.progress_label.configure(
+                text=(
+                    f"Transfer finished "
+                    f"with {failed_files} failed file(s)"
+                )
+            )
+
+        else:
+
+            self.progress.set(
+                100
+            )
+
+            self.progress_label.configure(
+                text="Transfer completed successfully"
+            )
